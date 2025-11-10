@@ -42,3 +42,5 @@ Thumbs.db
 # Test files
 test_audio/
 test_output/
+# FFmpeg binaries (too large for GitHub)
+ffmpeg/

@@ -21,26 +21,91 @@ A professional Python tool for splitting MP3 files into multiple parts with prec
 
 ### Prerequisites
 - Python 3.11+
-- FFmpeg (included in project)
+- FFmpeg (required for audio processing)
 
 ### Quick Start
-```powershell
-# Clone repository
+
+1. **Clone repository**
+```bash
 git clone https://github.com/life2allsofts/mp3-splitter.git
 cd mp3-splitter
+Download FFmpeg
 
-# Activate environment (PowerShell)
+Download from: https://www.gyan.dev/ffmpeg/builds/
+
+Choose "ffmpeg-git-essentials.7z"
+
+Extract and place the ffmpeg folder in your project root:
+
+text
+mp3-splitter/
+├── ffmpeg/
+│   └── bin/
+│       ├── ffmpeg.exe
+│       └── ffprobe.exe
+├── src/
+└── ...
+Setup environment
+
+powershell
+# Activate virtual environment
 .\activate.ps1
 
-# Run interactive mode
+# Run the application
 python main.py
-Manual Setup
-powershell
-# Create virtual environment
-py -3.11 -m venv venv
+Alternative: Use system FFmpeg
+If you have FFmpeg installed system-wide, the application will auto-detect it.
 
-# Activate
-.\venv\Scripts\Activate.ps1
+text
+
+### **Step 4: Create a setup script** `setup_ffmpeg.ps1`
+
+```powershell
+# setup_ffmpeg.ps1 - FFmpeg Download Helper
+Write-Host "🎵 MP3 Splitter - FFmpeg Setup Helper" -ForegroundColor Green
+Write-Host "======================================" -ForegroundColor Green
+
+$ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-essentials.7z"
+$downloadPath = "ffmpeg-download.7z"
+
+Write-Host "This script helps you download and setup FFmpeg for MP3 Splitter"
+Write-Host ""
+Write-Host "Option 1: Download FFmpeg automatically (Recommended)"
+Write-Host "Option 2: Manual download and setup"
+Write-Host ""
+
+$choice = Read-Host "Choose option (1 or 2)"
+
+if ($choice -eq "1") {
+    Write-Host "📥 Downloading FFmpeg..." -ForegroundColor Yellow
+    
+    # Check if 7-Zip is available
+    try {
+        Invoke-WebRequest -Uri $ffmpegUrl -OutFile $downloadPath
+        Write-Host "✅ Download completed!" -ForegroundColor Green
+        
+        Write-Host "Please extract the downloaded file manually:"
+        Write-Host "1. Open: $downloadPath"
+        Write-Host "2. Extract the 'ffmpeg' folder to your project root"
+        Write-Host "3. Delete the downloaded .7z file"
+        Write-Host ""
+        Write-Host "Project structure should be:"
+        Write-Host "mp3-splitter/ffmpeg/bin/ffmpeg.exe"
+        
+    } catch {
+        Write-Host "❌ Download failed: $_" -ForegroundColor Red
+        Write-Host "Please download manually from: $ffmpegUrl" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "📝 Manual Setup Instructions:" -ForegroundColor Cyan
+    Write-Host "1. Download from: https://www.gyan.dev/ffmpeg/builds/" -ForegroundColor White
+    Write-Host "2. Choose 'ffmpeg-git-essentials.7z'" -ForegroundColor White
+    Write-Host "3. Extract and place 'ffmpeg' folder in project root" -ForegroundColor White
+    Write-Host "4. Ensure structure: project/ffmpeg/bin/ffmpeg.exe" -ForegroundColor White
+}
+
+Write-Host ""
+Write-Host "🎯 After setup, run: .\activate.ps1" -ForegroundColor Green
 
 # Install dependencies
 pip install -r requirements.txt
