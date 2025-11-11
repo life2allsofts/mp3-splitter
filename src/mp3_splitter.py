@@ -1,51 +1,105 @@
 """
-Main MP3 splitting logic - Self-Configuring Version
+Enhanced MP3 Splitter with Video-to-Audio conversion support
 """
 
 import os
-import subprocess
 from pydub import AudioSegment
-from .utils import validate_file_path, calculate_part_duration, create_output_directory, format_time, get_file_size
-from .config import setup_ffmpeg, get_ffmpeg_path, get_ffprobe_path
+from .utils import (
+    validate_file_path, calculate_part_duration, create_output_directory, 
+    format_time, get_file_size, is_video_file, convert_video_to_mp3, get_file_info
+)
+from .config import setup_ffmpeg
 
-class MP3Splitter:
+class MediaProcessor:
+    """
+    Enhanced processor that handles both video conversion and audio splitting
+    """
+    
     def __init__(self, input_file):
-        # Auto-configure FFmpeg on initialization
+        # Setup FFmpeg first
         if not setup_ffmpeg():
-            raise RuntimeError("FFmpeg auto-configuration failed. Please ensure FFmpeg is available.")
+            raise RuntimeError("FFmpeg configuration failed. Cannot proceed.")
         
         # Validate and clean the file path
         input_file = os.path.abspath(input_file.strip().strip('"'))
         validate_file_path(input_file)
         self.input_file = input_file
+        self.is_video = is_video_file(input_file)
+        self.converted_mp3_path = None
         
-        print("📁 Loading audio file...")
-        try:
-            # Test if file is accessible
-            file_size = os.path.getsize(input_file)
-            print(f"📏 File size: {file_size / (1024*1024):.2f} MB")
+        print("📁 Analyzing media file...")
+        self.file_info = get_file_info(input_file)
+        
+        print(f"📊 File Type: {'Video' if self.is_video else 'Audio'}")
+        print(f"📏 File size: {self.file_info['file_size_mb']} MB")
+        print(f"⏱️  Duration: {self.file_info['formatted_duration']}")
+        
+    def convert_to_mp3(self, output_path=None, bitrate='320k'):
+        """
+        Convert video file to MP3 if it's a video file.
+        If it's already audio, returns the original path.
+        
+        Args:
+            output_path (str): Custom output path for converted file
+            bitrate (str): Audio quality setting
             
-            # Try to load audio with auto-configured FFmpeg
-            self.audio = AudioSegment.from_mp3(input_file)
-            self.duration = len(self.audio)
-            self.file_size = get_file_size(input_file)
-            print("✅ Audio file loaded successfully")
-            
-        except Exception as e:
-            raise RuntimeError(f"Failed to load audio file: {str(e)}")
+        Returns:
+            str: Path to MP3 file ready for splitting
+        """
+        if not self.is_video:
+            print("✅ File is already audio, no conversion needed")
+            return self.input_file
+        
+        print("🎥 Video file detected, converting to MP3...")
+        self.converted_mp3_path = convert_video_to_mp3(
+            self.input_file, 
+            output_path, 
+            bitrate
+        )
+        return self.converted_mp3_path
     
-    def split_mp3(self, num_parts, output_dir=None):
-        """Split MP3 file into specified number of parts."""
+    def load_audio_for_splitting(self, bitrate='320k'):
+        """
+        Prepare audio for splitting - converts video if necessary.
+        
+        Returns:
+            AudioSegment: Loaded audio ready for splitting
+        """
+        # Convert to MP3 if it's a video
+        mp3_path = self.convert_to_mp3(bitrate=bitrate)
+        
+        print("📁 Loading audio for splitting...")
+        try:
+            self.audio = AudioSegment.from_mp3(mp3_path)
+            self.duration = len(self.audio)
+            print("✅ Audio loaded successfully for splitting")
+            return self.audio
+        except Exception as e:
+            raise RuntimeError(f"Failed to load audio for splitting: {str(e)}")
+    
+    def split_media(self, num_parts, output_dir=None, bitrate='320k'):
+        """
+        Main method: Convert video to MP3 (if needed) and split into parts.
+        
+        Args:
+            num_parts (int): Number of parts to split into
+            output_dir (str): Custom output directory
+            bitrate (str): Audio quality for conversion
+            
+        Returns:
+            tuple: (converted_mp3_path, list_of_split_files)
+        """
         if num_parts <= 0:
             raise ValueError("Number of parts must be greater than 0")
         
-        if num_parts > 100:
-            raise ValueError("Number of parts cannot exceed 100 for performance reasons")
+        # Load audio (converts video if necessary)
+        self.load_audio_for_splitting(bitrate)
         
+        # Create output directory
+        base_name = os.path.splitext(os.path.basename(self.input_file))[0]
         if output_dir is None:
-            output_dir = create_output_directory(self.input_file)
-        else:
-            os.makedirs(output_dir, exist_ok=True)
+            output_dir = f"{base_name}_parts"
+        os.makedirs(output_dir, exist_ok=True)
         
         part_duration = calculate_part_duration(self.duration, num_parts)
         output_files = []
@@ -67,22 +121,21 @@ class MP3Splitter:
             output_path = os.path.join(output_dir, output_filename)
             
             print(f"  Creating part {i+1}/{num_parts}...", end=" ")
-            part_audio.export(output_path, format="mp3")
+            part_audio.export(output_path, format="mp3", bitrate=bitrate)
             output_files.append(output_path)
             
             print(f"✅ {output_filename} ({format_time(start_time)} - {format_time(end_time)})")
         
-        return output_files
+        return self.converted_mp3_path, output_files
     
-    def get_audio_info(self):
-        """Get information about the audio file."""
-        duration_seconds = self.duration / 1000
-        return {
-            'file_path': self.input_file,
-            'file_name': os.path.basename(self.input_file),
-            'file_size_mb': round(self.file_size, 2),
-            'duration_ms': self.duration,
-            'duration_seconds': round(duration_seconds, 2),
-            'duration_minutes': round(duration_seconds / 60, 2),
-            'formatted_duration': format_time(self.duration)
-        }
+    def get_media_info(self):
+        """Get comprehensive information about the media file."""
+        return self.file_info
+    
+    def cleanup(self):
+        """Clean up any temporary converted files."""
+        if self.converted_mp3_path and os.path.exists(self.converted_mp3_path):
+            # Only delete if it was created during this session
+            if self.converted_mp3_path != self.input_file:
+                os.remove(self.converted_mp3_path)
+                print(f"🧹 Cleaned up temporary file: {self.converted_mp3_path}")
